@@ -53,7 +53,6 @@ frontend/node_modules.root-owned/
 frontend/.vite/
 frontend/dist/
 frontend/.vite-temp/
-frontend/package-lock.json
 # Coverage and test output
 coverage/
 *.lcov

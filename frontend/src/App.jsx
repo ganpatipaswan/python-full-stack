@@ -22,7 +22,7 @@ function App() {
         setHealth(await healthRes.json());
         setMessage(await messageRes.json());
         setItems(await itemsRes.json());
-      } catch (err) {
+      } catch {
         setError(
           "API is not reachable. Start FastAPI with: uvicorn app.main:app --reload --port 8000"
         );
