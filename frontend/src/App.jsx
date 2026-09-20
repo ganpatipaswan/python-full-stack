@@ -47,7 +47,7 @@ function App() {
 
       <section className="grid">
         <article className="card">
-          <h2>API Health</h2>
+          <h2>API Health..</h2>
           <div className={`status ${health?.status === "ok" ? "ok" : ""}`}>
             {health?.status === "ok" ? "● Connected" : "● Checking..."}
           </div>
@@ -62,7 +62,7 @@ function App() {
       </section>
 
       <section className="card">
-        <h2>Demo Items</h2>
+        <h2>Demo Items update</h2>
         <div className="items">
           {items.map((item) => (
             <div className="item" key={item.id}>
