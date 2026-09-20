@@ -2,9 +2,12 @@ name: CD - AWS ECS Fargate
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+
   workflow_dispatch:
 
+# Required for GitHub OIDC -> AWS IAM
 permissions:
   id-token: write
   contents: read
@@ -14,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+  AWS_REGION: ap-south-1
   ECS_STACK: fastapi-react-production
   ECS_PROJECT: fastapi-react
 
@@ -22,23 +25,158 @@ jobs:
   deploy:
     name: Build and deploy to ECS
     runs-on: ubuntu-latest
+
+    # GitHub Environment
     environment:
       name: production
 
     steps:
+
+      # ---------------------------------------------------------
+      # 1. Checkout source code
+      # ---------------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v6
 
+
+      # ---------------------------------------------------------
+      # 2. Debug GitHub OIDC claims
+      #
+      # IMPORTANT:
+      # This is temporary.
+      # We use this to see the exact "sub" claim GitHub sends
+      # to AWS.
+      # ---------------------------------------------------------
+      - name: Debug GitHub OIDC claims
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import json
+          import base64
+          import urllib.request
+
+          print("==========================================")
+          print("GitHub OIDC Claims")
+          print("==========================================")
+
+          request = urllib.request.Request(
+              os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"],
+              headers={
+                  "Authorization":
+                      f"bearer {os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']}"
+              }
+          )
+
+          with urllib.request.urlopen(request) as response:
+              data = json.loads(response.read())
+
+          jwt = data["value"]
+
+          # JWT format:
+          # header.payload.signature
+          parts = jwt.split(".")
+
+          if len(parts) != 3:
+              raise RuntimeError("Invalid JWT format")
+
+          payload = parts[1]
+
+          # Add Base64 padding
+          payload += "=" * (-len(payload) % 4)
+
+          claims = json.loads(
+              base64.urlsafe_b64decode(payload)
+          )
+
+          print("issuer =", claims.get("iss"))
+          print("aud    =", claims.get("aud"))
+          print("sub    =", claims.get("sub"))
+          print("repo   =", claims.get("repository"))
+          print("owner  =", claims.get("repository_owner"))
+          print("ref    =", claims.get("ref"))
+          print("env    =", claims.get("environment"))
+
+          print("==========================================")
+          print("OIDC diagnostic completed")
+          print("==========================================")
+          PY
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+
+
+      # ---------------------------------------------------------
+      # 3. Configure AWS credentials using GitHub OIDC
+      # ---------------------------------------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::797882812918:role/GitHubActions-ECS-Deploy-Role
           aws-region: ${{ env.AWS_REGION }}
+          audience: sts.amazonaws.com
 
+
+      # ---------------------------------------------------------
+      # 4. Verify AWS identity
+      # ---------------------------------------------------------
       - name: Verify AWS identity
-        run: aws sts get-caller-identity
+        run: |
+          echo "AWS Identity:"
+          aws sts get-caller-identity
 
-      - name: Build and deploy complete AWS stack
+
+      # ---------------------------------------------------------
+      # 5. Verify AWS region
+      # ---------------------------------------------------------
+      - name: Verify AWS configuration
+        run: |
+          echo "AWS Region: $AWS_REGION"
+          echo "ECS Stack: $ECS_STACK"
+          echo "ECS Project: $ECS_PROJECT"
+
+
+      # ---------------------------------------------------------
+      # 6. Check AWS access
+      # ---------------------------------------------------------
+      - name: Check AWS access
+        run: |
+          echo "Checking AWS access..."
+
+          aws sts get-caller-identity
+
+          echo "Checking ECR access..."
+
+          aws ecr describe-repositories \
+            --region "$AWS_REGION" \
+            --query 'repositories[].repositoryName' \
+            --output table || true
+
+          echo "AWS access check completed."
+
+
+      # ---------------------------------------------------------
+      # 7. Make deploy script executable
+      # ---------------------------------------------------------
+      - name: Prepare deployment script
         run: |
           chmod +x deploy/ecs/deploy.sh
+
+          echo "Deployment script:"
+          ls -la deploy/ecs/deploy.sh
+
+
+      # ---------------------------------------------------------
+      # 8. Deploy complete AWS stack
+      # ---------------------------------------------------------
+      - name: Build and deploy complete AWS stack
+        run: |
+          echo "=========================================="
+          echo "Starting ECS deployment"
+          echo "=========================================="
+
           ./deploy/ecs/deploy.sh
+
+          echo "=========================================="
+          echo "ECS deployment completed"
+          echo "=========================================="
