@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(
     title="FastAPI React Demo API",
@@ -41,6 +42,13 @@ def items():
         {"id": 2, "name": "FastAPI", "type": "backend"},
         {"id": 3, "name": "GitHub Actions", "type": "ci-cd"},
     ]
+
+
+app.mount(
+    "/",
+    StaticFiles(directory="frontend-dist", html=True, check_dir=False),
+    name="frontend",
+)
 
 
 if __name__ == "__main__":
