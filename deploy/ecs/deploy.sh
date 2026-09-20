@@ -22,7 +22,7 @@ docker info >/dev/null
 
 ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
 REGISTRY="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com"
-IMAGE_URI="${REGISTRY}/${PROJECT_NAME}:${IMAGE_TAG}"
+IMAGE_TAG="$(git rev-parse --short HEAD)"
 
 aws ecr describe-repositories \
   --repository-names "$PROJECT_NAME" \
