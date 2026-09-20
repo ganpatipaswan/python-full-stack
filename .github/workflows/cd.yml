@@ -4,16 +4,11 @@ on:
   push:
     branches:
       - main
-
   workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
-
-concurrency:
-  group: production
-  cancel-in-progress: false
 
 env:
   AWS_REGION: ap-south-1
@@ -21,96 +16,47 @@ env:
   ECS_PROJECT: fastapi-react
 
 jobs:
-
   deploy:
-    name: Build and deploy to ECS
     runs-on: ubuntu-latest
 
     environment:
       name: production
 
     steps:
-
-      # ==========================================
-      # Checkout
-      # ==========================================
-
       - name: Checkout
         uses: actions/checkout@v6
-
-
-      # ==========================================
-      # DEBUG OIDC
-      # ==========================================
 
       - name: Debug GitHub OIDC claims
         shell: bash
         run: |
-
-          set -e
-
-          echo "=========================================="
-          echo "GitHub OIDC Diagnostics"
-          echo "=========================================="
-
           python - <<'PY'
-
           import os
           import json
           import base64
           import urllib.request
 
-          url = os.environ.get(
-              "ACTIONS_ID_TOKEN_REQUEST_URL"
-          )
-
-          token = os.environ.get(
-              "ACTIONS_ID_TOKEN_REQUEST_TOKEN"
-          )
-
-          if not url:
-              raise RuntimeError(
-                  "ACTIONS_ID_TOKEN_REQUEST_URL is missing"
-              )
-
-          if not token:
-              raise RuntimeError(
-                  "ACTIONS_ID_TOKEN_REQUEST_TOKEN is missing"
-              )
+          url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"]
+          token = os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]
 
           request = urllib.request.Request(
               url,
               headers={
-                  "Authorization":
-                  f"bearer {token}"
+                  "Authorization": f"bearer {token}"
               }
           )
 
           with urllib.request.urlopen(request) as response:
-              data = json.loads(
-                  response.read()
-              )
+              data = json.loads(response.read())
 
           jwt = data["value"]
 
-          parts = jwt.split(".")
-
-          if len(parts) != 3:
-              raise RuntimeError(
-                  "Invalid GitHub OIDC JWT"
-              )
-
-          payload = parts[1]
-
-          payload += "=" * (
-              -len(payload) % 4
-          )
+          payload = jwt.split(".")[1]
+          payload += "=" * (-len(payload) % 4)
 
           claims = json.loads(
               base64.urlsafe_b64decode(payload)
           )
 
-          print("")
           print("issuer   =", claims.get("iss"))
           print("aud      =", claims.get("aud"))
           print("sub      =", claims.get("sub"))
@@ -120,20 +66,7 @@ jobs:
           print("owner_id =", claims.get("repository_owner_id"))
           print("ref      =", claims.get("ref"))
           print("env      =", claims.get("environment"))
-          print("workflow =", claims.get("workflow"))
-          print("event    =", claims.get("event_name"))
-          print("")
-
           PY
-
-          echo "=========================================="
-          echo "OIDC diagnostics completed"
-          echo "=========================================="
-
-
-      # ==========================================
-      # AWS OIDC LOGIN
-      # ==========================================
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -142,24 +75,11 @@ jobs:
           aws-region: ap-south-1
           audience: sts.amazonaws.com
 
-
-      # ==========================================
-      # Verify AWS
-      # ==========================================
-
       - name: Verify AWS identity
         run: |
-          echo "AWS identity:"
           aws sts get-caller-identity
 
-
-      # ==========================================
-      # Deploy
-      # ==========================================
-
-      - name: Deploy application
+      - name: Deploy
         run: |
-
           chmod +x deploy/ecs/deploy.sh
-
           ./deploy/ecs/deploy.sh
