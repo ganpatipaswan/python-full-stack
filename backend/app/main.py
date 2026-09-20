@@ -22,7 +22,7 @@ app.add_middleware(
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "message": "FastAPI is reachable"}
+    return {"status": "ok", "message": "FastAPI is reachable ok"}
 
 
 @app.get("/api/message")

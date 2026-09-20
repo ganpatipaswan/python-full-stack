@@ -35,7 +35,7 @@ function App() {
   return (
     <main className="page">
       <section className="hero">
-        <p className="eyebrow">FULL-STACK DEMO</p>
+        <p className="eyebrow">FULL-STACK DEMO-1</p>
         <h1>React.js + FastAPI</h1>
         <p className="subtitle">
           A clean database-free project designed for API integration and
